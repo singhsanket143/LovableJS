@@ -2,7 +2,14 @@
   "name": "Lovable",
   "private": true,
   "scripts": {
-    "dev": "npm run dev -w server"
+    "dev": "npm run dev -w server",
+    "docker:up": "docker compose up -d --wait",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "db:migrate": "npm run prisma:migrate -w server",
+    "db:studio": "npm run prisma:studio -w server",
+    "db:generate": "npm run prisma:generate -w server",
+    "db:push": "npm run prisma:push -w server"
   },
   "workspaces": [
     "server"
