@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_USER: vibe
       POSTGRES_PASSWORD: vibe
-      POSTGRES_DB: vibe
+      POSTGRES_DB: lovablejs
     ports:
       - "5432:5432"
     volumes:
