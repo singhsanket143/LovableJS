@@ -1,11 +1,18 @@
 import { Router } from "express";
-import { listProjectMessages } from "../controllers/message";
+import {
+  createProjectMessage,
+  listProjectMessages,
+} from "../controllers/message";
 import {
   createProjectHandler,
   getProject,
   listProjects,
 } from "../controllers/project";
-import { createProjectBodySchema, idParamsSchema } from "../middleware/schemas";
+import {
+  createMessageBodySchema,
+  createProjectBodySchema,
+  idParamsSchema,
+} from "../middleware/schemas";
 import { validateBody, validateParams } from "../middleware/validate";
 
 export const projectRouter = Router();
@@ -16,5 +23,11 @@ projectRouter.get(
   "/:id/messages",
   validateParams(idParamsSchema),
   listProjectMessages,
+);
+projectRouter.post(
+  "/:id/messages",
+  validateParams(idParamsSchema),
+  validateBody(createMessageBodySchema),
+  createProjectMessage,
 );
 projectRouter.get("/:id", validateParams(idParamsSchema), getProject);

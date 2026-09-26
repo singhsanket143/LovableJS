@@ -12,6 +12,22 @@ export async function findMessagesByProjectId(
     orderBy: { createdAt: "asc" },
     include: {
       fragments: true,
-    }
+    },
+  });
+}
+
+type CreateMessageInput = {
+  projectId: string;
+  content: string;
+};
+
+export async function createMessage(input: CreateMessageInput): Promise<Message> {
+  return prisma.message.create({
+    data: {
+      projectId: input.projectId,
+      content: input.content,
+      role: "user",
+      type: "result",
+    },
   });
 }

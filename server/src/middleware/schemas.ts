@@ -11,3 +11,9 @@ export const createProjectBodySchema = z.object({
 });
 
 export type CreateProjectBody = z.infer<typeof createProjectBodySchema>;
+
+export const createMessageBodySchema = z.object({
+  content: z.string().trim().min(1, "Content is required"),
+});
+
+export type CreateMessageBody = z.infer<typeof createMessageBodySchema>;
