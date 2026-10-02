@@ -1,5 +1,7 @@
+import { exec, type ExecException } from "child_process";
 import fs from "fs/promises";
 import path from "path";
+import { promisify } from "util";
 
 import { sandboxRoot } from "../config/constants";
 
@@ -104,6 +106,65 @@ export async function readSandboxFiles(
       return { path: cleanedPath, content };
     }),
   );
+}
+
+const execAsync = promisify(exec);
+
+const SANDBOX_COMMAND_TIMEOUT_MS = 60_000;
+const SANDBOX_COMMAND_MAX_BUFFER = 1024 * 1024; // 1MB
+
+function formatCommandSuccess(stdout: string, stderr: string): string {
+  const trimmedStdout = stdout.trim();
+  const trimmedStderr = stderr.trim();
+  if (trimmedStdout) return trimmedStdout;
+  if (trimmedStderr) return trimmedStderr;
+  return "no output";
+}
+
+function formatCommandFailure(
+  message: string,
+  stdout = "",
+  stderr = "",
+): string {
+  const parts = [`Error: ${message}`];
+  const trimmedStdout = stdout.trim();
+  const trimmedStderr = stderr.trim();
+  if (trimmedStdout) parts.push(`stdout:\n${trimmedStdout}`);
+  if (trimmedStderr) parts.push(`stderr:\n${trimmedStderr}`);
+  return parts.join("\n\n");
+}
+
+function asExecException(error: unknown): ExecException | null {
+  if (!(error instanceof Error)) return null;
+  if (!("stdout" in error || "stderr" in error)) return null;
+  return error as ExecException;
+}
+
+export async function runSandboxCommand(
+  sandboxId: string,
+  command: string,
+): Promise<string> {
+  try {
+    const sandboxDir = await ensureSandbox(sandboxId);
+    const { stdout, stderr } = await execAsync(command, {
+      cwd: sandboxDir,
+      timeout: SANDBOX_COMMAND_TIMEOUT_MS,
+      maxBuffer: SANDBOX_COMMAND_MAX_BUFFER,
+    });
+    return formatCommandSuccess(String(stdout), String(stderr));
+  } catch (error) {
+    const execError = asExecException(error);
+    if (execError) {
+      return formatCommandFailure(
+        execError.message,
+        String(execError.stdout ?? ""),
+        String(execError.stderr ?? ""),
+      );
+    }
+    return formatCommandFailure(
+      error instanceof Error ? error.message : String(error),
+    );
+  }
 }
 
 const SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", "target", "tmp", "temp", "cache", ".git"]);
