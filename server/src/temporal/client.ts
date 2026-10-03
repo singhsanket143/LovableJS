@@ -2,7 +2,11 @@ import { Client, Connection } from "@temporalio/client";
 
 import { env } from "../config/env";
 import { retryWithExponentialBackoff } from "../utils/retry";
-import { pingWorkflow } from "./workflows";
+import {
+  codeAgentWorkflow,
+  pingWorkflow,
+  type CodeAgentInput,
+} from "./workflows";
 
 export async function connect(): Promise<Client> {
   return retryWithExponentialBackoff(async () => {
@@ -29,15 +33,29 @@ export async function startPing(name: string): Promise<string> {
   return handle.result();
 }
 
-async function main(): Promise<void> {
-  const name = process.argv[2] ?? "Temporal";
-  const result = await startPing(name);
-  console.log(`pingWorkflow result: ${result}`);
+export async function startCodeAgent(
+  input: CodeAgentInput,
+): Promise<Awaited<ReturnType<typeof codeAgentWorkflow>>> {
+  const client = await connect();
+
+  const handle = await client.workflow.start(codeAgentWorkflow, {
+    taskQueue: env.TEMPORAL_TASK_QUEUE,
+    workflowId: `code-agent-${input.projectId}-${Date.now()}`,
+    args: [input],
+  });
+
+  return handle.result();
 }
 
-if (require.main === module) {
-  main().catch((error) => {
-    console.error("Temporal client failed:", error);
-    process.exit(1);
-  });
-}
+// async function main(): Promise<void> {
+//   const name = process.argv[2] ?? "Temporal";
+//   const result = await startPing(name);
+//   console.log(`pingWorkflow result: ${result}`);
+// }
+
+// if (require.main === module) {
+//   main().catch((error) => {
+//     console.error("Temporal client failed:", error);
+//     process.exit(1);
+//   });
+// }

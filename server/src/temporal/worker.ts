@@ -2,6 +2,7 @@ import { NativeConnection, Worker } from "@temporalio/worker";
 
 import { env } from "../config/env";
 import { retryWithExponentialBackoff } from "../utils/retry";
+import * as activities from "./activities";
 
 export async function connect(): Promise<NativeConnection> {
   return retryWithExponentialBackoff(
@@ -21,7 +22,7 @@ async function main(): Promise<void> {
     namespace: env.TEMPORAL_NAMESPACE,
     taskQueue: env.TEMPORAL_TASK_QUEUE,
     workflowsPath: require.resolve("./workflows"),
-    activities: {},
+    activities,
   });
 
   console.log(
