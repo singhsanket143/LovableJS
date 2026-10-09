@@ -8,6 +8,7 @@ import {
   findProjectById,
 } from "../repository/project.repository";
 import { saveResult } from "../repository/message.repository";
+import { startCodeAgent } from "../temporal/client";
 
 const HELLO_WORLD_FILES: FileCollection = {
   "src/App.tsx": `export default function App() {
@@ -27,14 +28,9 @@ export async function getProjectById(id: string): Promise<Project | null> {
 export async function createProject(messageContent: string) {
   const name = generateSlug(3, { format: "kebab" });
   const project = await createProjectWithMessage({ name, messageContent });
-  await writeSandboxFiles(project.id, HELLO_WORLD_FILES);
-  await saveResult({
+  await startCodeAgent({
     projectId: project.id,
-    content: "Here is a hello world sandbox",
-    title: "Hello World",
-    files: HELLO_WORLD_FILES,
-    sandboxUrl: `/api/preview/${project.id}`,
-    isError: false,
-  })
+    prompt: messageContent,
+  });
   return project;
 }

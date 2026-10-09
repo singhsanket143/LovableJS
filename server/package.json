@@ -12,6 +12,8 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@langchain/core": "^1.2.17",
+    "@langchain/openai": "^1.6.2",
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "^7.10.0",
     "@temporalio/activity": "^1.24.0",
@@ -21,6 +23,7 @@
     "cors": "^2.8.6",
     "dotenv": "^18.0.0",
     "express": "^5.2.1",
+    "langchain": "^1.5.16",
     "pg": "^8.23.0",
     "random-word-slugs": "^0.1.7",
     "zod": "^4.6.5"
