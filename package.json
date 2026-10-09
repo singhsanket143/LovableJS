@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "dev": "npm run dev -w server",
+    "dev:all": "npm run dev:all -w server",
+    "dev:worker": "npm run dev:worker -w server",
     "docker:up": "docker compose up -d --wait",
     "docker:down": "docker compose down",
     "docker:logs": "docker compose logs -f",

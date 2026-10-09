@@ -2,7 +2,12 @@ import { proxyActivities } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
 
-const { createSandbox, saveResult } = proxyActivities<typeof activities>({
+const { 
+  createSandbox, 
+  saveResult,
+  generateTitle,
+  generateResponse,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   retry: {
     maximumAttempts: 3,
@@ -21,10 +26,14 @@ export async function pingWorkflow(name: string): Promise<string> {
 export async function codeAgentWorkflow(input: CodeAgentInput) {
   await createSandbox(input.projectId);
 
+  const SAMPLE_SUMMARY = "A custom React app tailored to create TODO list app"; // once coding agent is completed this will be coming from the agent
+  const title = await generateTitle(SAMPLE_SUMMARY) ;
+  const response = await generateResponse(SAMPLE_SUMMARY);
+
   await saveResult({
     projectId: input.projectId,
-    content: `Generated app for prompt: ${input.prompt}`,
-    title: "Generated app",
+    content: response,
+    title: title,
     sandboxUrl: `/api/preview/${input.projectId}`,
     files: {
       "src/App.tsx": `export default function App() {

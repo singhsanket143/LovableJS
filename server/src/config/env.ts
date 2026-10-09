@@ -22,6 +22,7 @@ export const env = {
   DATABASE_URL: process.env.DATABASE_URL ?? "",
   NODE_ENV: process.env.NODE_ENV ?? "development",
   OPENAI_API_KEY: process.env.OPENAI_API_KEY ?? "",
+  OPENAI_MODEL: (process.env.OPENAI_MODEL ?? "gpt-4o-mini").trim(),
   OPENAI_REASONING_EFFORT: parseOpenAiReasoningEffort(
     process.env.OPENAI_REASONING_EFFORT,
   ),
