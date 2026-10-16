@@ -13,13 +13,13 @@ datasource db {
 }
 
 enum MessageRole {
-  user
-  assistant
+  USER
+  ASSISTANT
 }
 
 enum MessageType {
-  result
-  error
+  RESULT
+  ERROR
 }
 
 model Project {
