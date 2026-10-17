@@ -21,6 +21,8 @@ export async function streamAgentValues(
   for await (const chunk of stream) {
     options?.onProgress?.();
 
+    console.log("chunk", chunk);
+
     const messages = messagesFromValuesChunk(chunk);
     if (messages.length > 0) {
       lastMessages = messages;

@@ -1,15 +1,11 @@
 import { getChatModel, hasLlm } from "../../lib/model";
-import { createAgent } from "langchain";
+import { createAgent, todoListMiddleware } from "langchain";
 import { defaultPlan, TodoItem } from "../../lib/plan";
 import { appendAgentMessage } from "../shared/handoff";
 import type { PlannerInput, PlannerResult } from "../types";
 import { env } from "../../config/env";
 import { lastAssistantText, streamAgentValues } from "../shared/langchain";
-
-const PLANNER_PROMPT = `
-You are the planning lead. Do not write code. In 2–4 sentences, outline how you would approach building 
-the user's app (UX, risks, order of work). Do not use markdown headings.
-`;
+import { PLANNER_PROMPT } from "./prompt";
 
 export async function runPlanner(input: PlannerInput): Promise<PlannerResult> {
   const todos: TodoItem[] = input.todos.length ? input.todos : defaultPlan(input.prompt);
@@ -25,6 +21,7 @@ export async function runPlanner(input: PlannerInput): Promise<PlannerResult> {
     systemPrompt: PLANNER_PROMPT,
     version: "v1",
     signal: input.signal,
+    middleware: [todoListMiddleware()]
   });
 
   const history = input.thread;

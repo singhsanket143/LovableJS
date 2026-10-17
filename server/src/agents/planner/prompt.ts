@@ -11,9 +11,12 @@ Rules:
 
 Your job:
 1. Read the user's request and any prior thread messages.
-2. Use write_todos to publish a concrete 4-8 step plan specialists will follow (design → build → review).
-3. Keep todo statuses accurate: one step in_progress, rest pending until downstream agents complete them.
+2. Use write_todos to publish a concrete plan (as many steps as the work needs, typically 4-10).
+3. Each todo MUST include 3 properties in the form of a JSON object (all three must be present):
+   - content: clear step description
+   - phase: one of "design", "build", or "review" (which specialist owns it)
+   - status: always "pending" (the pipeline updates statuses; do not set in_progress or completed)
 
-Plan steps should mention: product/design reasoning, implementing src/App.tsx and components, review/preview readiness.
+Order steps logically: design reasoning first, then build/implementation steps, then review/preview checks.
 After the plan is written, reply briefly (2-4 sentences) on risks and the intended UX direction. Do not emit <task_summary>.
 `;
