@@ -1,3 +1,34 @@
+function messagesFromValuesChunk(chunk: unknown): unknown[] {
+  if (!chunk || typeof chunk !== "object") {
+    return [];
+  }
+
+  const record = chunk as Record<string, unknown>;
+
+  if (Array.isArray(record.messages)) {
+    return record.messages;
+  }
+
+  return [];
+}
+
+export async function streamAgentValues(
+  stream: AsyncIterable<unknown>,
+  options?: { onProgress?: () => void },
+): Promise<unknown[]> {
+  let lastMessages: unknown[] = [];
+
+  for await (const chunk of stream) {
+    options?.onProgress?.();
+
+    const messages = messagesFromValuesChunk(chunk);
+    if (messages.length > 0) {
+      lastMessages = messages;
+    }
+  }
+
+  return lastMessages;
+}
 
 export function messageText(content: unknown): string {
     if(typeof content === "string") return content;
