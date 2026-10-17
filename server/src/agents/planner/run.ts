@@ -1,14 +1,22 @@
 import { getChatModel, hasLlm } from "../../lib/model";
 import { createAgent, todoListMiddleware } from "langchain";
-import { defaultPlan, TodoItem } from "../../lib/plan";
+import { defaultPlan, normalizeToDo, TodoItem } from "../../lib/plan";
 import { appendAgentMessage } from "../shared/handoff";
 import type { PlannerInput, PlannerResult } from "../types";
 import { env } from "../../config/env";
 import { lastAssistantText, streamAgentValues } from "../shared/langchain";
 import { PLANNER_PROMPT } from "./prompt";
 
+
+export function parsePlannerTodos(value: unknown): TodoItem[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((entry) => normalizeToDo(entry))
+    .filter((item): item is TodoItem => Boolean(item));
+}
+
 export async function runPlanner(input: PlannerInput): Promise<PlannerResult> {
-  const todos: TodoItem[] = input.todos.length ? input.todos : defaultPlan(input.prompt);
+  const todos: TodoItem[] = input.todos.length ? input.todos : [];
 
   if(!hasLlm()) {
     return { thread: input.thread, todos, notes: "Created plan using the default plan" }
@@ -34,21 +42,23 @@ export async function runPlanner(input: PlannerInput): Promise<PlannerResult> {
     recursionLimit: 12,
   });
 
-  const lastMessages = await streamAgentValues(stream, {
+  const { messages: lastMessages, todos: lastTodos } = await streamAgentValues(stream, {
     onProgress: input.onProgress,
   });
+
+  const parsedTodos = parsePlannerTodos(lastTodos);
 
   const notes =
     lastAssistantText(lastMessages) ||
     "[Hardcoded] Plan created for the project";
 
-  await input.onTodos?.(todos, { agent: "planner", detail: "Plan created by the agent for the project" });
+  await input.onTodos?.(parsedTodos, { agent: "planner", detail: "Plan created by the agent for the project" });
 
   const thread = appendAgentMessage(input.thread, "planner", notes);
 
   return {
     notes,
-    todos,
+    todos: parsedTodos,
     thread,
   };
 }
