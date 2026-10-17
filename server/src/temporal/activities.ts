@@ -2,7 +2,8 @@ import { runPlainPrompt } from "../lib/llm";
 import { FRAGMENT_TITLE_PROMPT, RESPONSE_PROMPT } from "../lib/prompt";
 import { FileCollection, readSandboxTree } from "../lib/sandbox";
 
-export { saveResult } from "../repository/message.repository";
+export { loadMessages, saveResult } from "../repository/message.repository";
+export { runPlannerActivity } from "./agent-activities";
 
 export async function createSandbox(projectId: string) {
   return projectId;

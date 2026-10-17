@@ -1,14 +1,29 @@
 import { proxyActivities } from "@temporalio/workflow";
 
 import type * as activities from "./activities";
+import {
+  createAgentBasePayload,
+  emptyPipelineState,
+  type WorkflowAgentMessage,
+  type WorkflowPipelineState,
+} from "./workflow-types";
 
-const { 
-  createSandbox, 
+const {
+  createSandbox,
   saveResult,
   generateTitle,
   generateResponse,
+  loadMessages,
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
+  retry: {
+    maximumAttempts: 3,
+  },
+});
+
+const { runPlannerActivity } = proxyActivities<typeof activities>({
+  startToCloseTimeout: "10 minutes",
+  heartbeatTimeout: "30 seconds",
   retry: {
     maximumAttempts: 3,
   },
@@ -24,7 +39,20 @@ export async function pingWorkflow(name: string): Promise<string> {
 }
 
 export async function codeAgentWorkflow(input: CodeAgentInput) {
-  await createSandbox(input.projectId);
+  const sandboxId =await createSandbox(input.projectId);
+  const previousMessages = await loadMessages(input.projectId);
+
+  const thread = previousMessages.length > 0 ? [...previousMessages] : [
+    { role: "user", content: input.prompt}
+  ]
+
+  let state: WorkflowPipelineState = emptyPipelineState(thread as WorkflowAgentMessage[]); // input in the temporal activity
+
+  // running the planner agent activity
+  state = await runPlannerActivity(createAgentBasePayload(input, state))
+
+
+  
 
   const SAMPLE_SUMMARY = "A custom React app tailored to create TODO list app"; // once coding agent is completed this will be coming from the agent
   const title = await generateTitle(SAMPLE_SUMMARY) ;

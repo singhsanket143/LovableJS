@@ -1,4 +1,8 @@
-import type { Project } from "../../generated/prisma/client";
+import {
+  MessageRole,
+  MessageType,
+  type Project,
+} from "../../generated/prisma/client";
 import { LOCAL_USER_ID } from "../config/constants";
 import { prisma } from "../lib/prisma";
 
@@ -28,8 +32,8 @@ export async function createProjectWithMessage(input: CreateProjectWithMessageIn
       messages: {
         create: {
           content: input.messageContent,
-          role: "user",
-          type: "result",
+          role: MessageRole.USER,
+          type: MessageType.RESULT,
         },
       },
     },
