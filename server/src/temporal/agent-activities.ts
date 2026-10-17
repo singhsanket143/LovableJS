@@ -67,6 +67,7 @@ export async function runPlannerActivity(
             onProgress: beat,
             onTodos: async (todos, activity) => {
                 state.todos = todos;
+                console.log("onTodos", todos, activity);
                 await syncPlan(input.projectId, state, todos, activity);
                 beat();
             }
@@ -74,8 +75,7 @@ export async function runPlannerActivity(
         });
 
         state.thread = result.thread;
-        // state.todos = updateTodoStatusForSubagent(state.todos, "design_app", "start");
-        state.todos = result.todos;
+        state.todos = updateTodoStatusForSubagent(state.todos, "design_app", "start"); // move the design related todos to in_progress status from pending status
 
         await syncPlan(input.projectId, state, state.todos, {
             agent: "planner",

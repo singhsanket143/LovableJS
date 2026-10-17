@@ -242,7 +242,7 @@ export function defaultPlan(prompt: string): TodoItem[] {
   return [
     {
       content: `Reason about UX, information architecture, and layout for: ${request}`,
-      status: "in_progress",
+      status: "pending",
       phase: "design",
     },
     {
