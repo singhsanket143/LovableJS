@@ -1,6 +1,6 @@
 import { getChatModel, hasLlm } from "../../lib/model";
 import { createAgent, todoListMiddleware } from "langchain";
-import { defaultPlan, TodoItem } from "../../lib/plan";
+import { defaultPlan, parsePlannerTodos, TodoItem } from "../../lib/plan";
 import { appendAgentMessage } from "../shared/handoff";
 import type { PlannerInput, PlannerResult } from "../types";
 import { env } from "../../config/env";
@@ -34,21 +34,23 @@ export async function runPlanner(input: PlannerInput): Promise<PlannerResult> {
     recursionLimit: 12,
   });
 
-  const lastMessages = await streamAgentValues(stream, {
+  const { messages: lastMessages, todos: lastTodos } = await streamAgentValues(stream, {
     onProgress: input.onProgress,
   });
+
+  const parsedTodos = parsePlannerTodos(lastTodos);
 
   const notes =
     lastAssistantText(lastMessages) ||
     "[Hardcoded] Plan created for the project";
 
-  await input.onTodos?.(todos, { agent: "planner", detail: "Plan created by the agent for the project" });
+  await input.onTodos?.(parsedTodos, { agent: "planner", detail: "Plan created by the agent for the project" });
 
   const thread = appendAgentMessage(input.thread, "planner", notes);
 
   return {
     notes,
-    todos,
+    todos: parsedTodos,
     thread,
   };
 }

@@ -23,12 +23,27 @@ const PHASE_INDEX: Record<TodoPhase, number> = {
   cancelled: 3,
 };
 
-const REVIEW_PHASE_PATTERN =
-  /\b(review|polish|summary|export|verify|preview)\b/;
-const DESIGN_PHASE_PATTERN =
-  /\b(design|visual|ux|architect|reason|wireframe)\b/;
+const PHASE_TAG_PATTERN = /\bphase\s*:\s*(design|build|review)\b/;
 
-export function inferToDoPhase(content: string): Exclude<TodoPhase, "cancelled"> {
+const REVIEW_PHASE_PATTERN =
+  /\b(review|summary|export|verify|validation|preview|qa|q&a|quality|accessibility|a11y|audit|test|testing|edge cases|edge-case|typescript check|compile check|bundling)\b/;
+
+const DESIGN_PHASE_PATTERN =
+  /\b(define|design|designing|ux|ui|ia|information architecture|architect|architecture|reason|reasoning|wireframe|mockup|prototype|visual identity|identity|palette|typography|spacing|radius|user flow|user-flow|layout|spec|planning|file map|component plan|structure plan|scoping)\b/;
+
+const BUILD_PHASE_PATTERN =
+  /\b(build|implement|implementation|scaffold|boilerplate|develop|code|coding|wire|integrate|integration|tailwind|state|interaction|interactions|styling|style|polish|responsive|mobile|desktop|colors|touch targets|touch-target|lucide|icons|persist|localstorage|local storage|fetch|api|hook up|connect|add feature|create feature)\b/;
+
+function phaseFromContentTag(content: string): Exclude<TodoPhase, "cancelled"> | null {
+  const match = content.toLowerCase().match(PHASE_TAG_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  return match[1] as Exclude<TodoPhase, "cancelled">;
+}
+
+function phaseFromContentKeywords(content: string): Exclude<TodoPhase, "cancelled"> {
   const normalized = content.toLowerCase();
 
   if (REVIEW_PHASE_PATTERN.test(normalized)) {
@@ -39,7 +54,20 @@ export function inferToDoPhase(content: string): Exclude<TodoPhase, "cancelled">
     return "design";
   }
 
+  if (BUILD_PHASE_PATTERN.test(normalized)) {
+    return "build";
+  }
+
   return "build";
+}
+
+export function inferToDoPhase(content: string): Exclude<TodoPhase, "cancelled"> {
+  const fromTag = phaseFromContentTag(content);
+  if (fromTag) {
+    return fromTag;
+  }
+
+  return phaseFromContentKeywords(content);
 }
 
 function isTodoPhase(value: unknown): value is TodoPhase {
@@ -49,12 +77,8 @@ function isTodoPhase(value: unknown): value is TodoPhase {
   );
 }
 
-export function parsePhase(value: unknown, content: string): TodoPhase {
-  if (isTodoPhase(value)) {
-    return value;
-  }
-
-  return inferToDoPhase(content); // guess phase based on content
+export function parsePhase(_value: unknown, content: string): TodoPhase {
+  return inferToDoPhase(content);
 }
 
 const STATUS_TRANSITIONS: Record<TodoStatus, TodoStatus[]> = { // graph edges
@@ -172,6 +196,12 @@ export function normalizeToDo(value: unknown): TodoItem | null {
   };
 }
 
+export function parsePlannerTodos(value: unknown): TodoItem[] {
+    if(!Array.isArray(value)) return [];
+    return value.map((item) => normalizeToDo(item))
+    .filter((item): item is TodoItem => Boolean(item));
+}
+
 export function parseTodos(value: unknown): TodoItem[] {
   if (!Array.isArray(value)) {
     return [];
@@ -241,36 +271,37 @@ export function defaultPlan(prompt: string): TodoItem[] {
 
   return [
     {
-      content: `Reason about UX, information architecture, and layout for: ${request}`,
+      content: `Design UX, information architecture, and layout for: ${request}. Phase: design`,
       status: "pending",
       phase: "design",
     },
     {
       content:
-        "Scaffold the React + Tailwind boilerplate (entry, index.html/CSS) with src/App.tsx default export",
+        "Scaffold the React + Tailwind boilerplate (entry, index.html/CSS) with src/App.tsx default export. Phase: build",
       status: "pending",
       phase: "build",
     },
     {
       content:
-        "Add focused UI components under src/components and wire them into App.tsx",
+        "Implement focused UI components under src/components and wire them into App.tsx. Phase: build",
       status: "pending",
       phase: "build",
     },
     {
       content:
-        "Implement core interactions, state, and styling polish for the main user flows",
+        "Build core interactions, state, and Tailwind styling polish for the main user flows. Phase: build",
       status: "pending",
       phase: "build",
     },
     {
       content:
-        "Review accessibility, responsive layout, and edge cases; fix issues found",
+        "Review accessibility, responsive layout, and edge cases; verify fixes. Phase: review",
       status: "pending",
       phase: "review",
     },
     {
-      content: "Verify preview build and summarize what was delivered",
+      content:
+        "Preview export: verify preview build and summarize what was delivered. Phase: review",
       status: "pending",
       phase: "review",
     },

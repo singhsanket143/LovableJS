@@ -1,35 +1,49 @@
-function messagesFromValuesChunk(chunk: unknown): unknown[] {
+function messagesFromValuesChunk(chunk: unknown): { todos: unknown[], messages: unknown[] } {
   if (!chunk || typeof chunk !== "object") {
-    return [];
+    return { todos: [], messages: [] };
   }
 
   const record = chunk as Record<string, unknown>;
 
-  if (Array.isArray(record.messages)) {
-    return record.messages;
+  if ("todos" in record) {
+    return {
+        todos: Array.isArray(record.todos) ? record.todos : [],
+        messages: Array.isArray(record.messages) ? record.messages : [],
+    }
   }
 
-  return [];
+
+  if (Array.isArray(record.messages)) {
+    return {
+        todos: [],
+        messages: Array.isArray(record.messages) ? record.messages : [],
+    }
+  }
+
+  return { todos: [], messages: [] };
 }
 
 export async function streamAgentValues(
   stream: AsyncIterable<unknown>,
   options?: { onProgress?: () => void },
-): Promise<unknown[]> {
+): Promise<{ messages: unknown[], todos: unknown[] }> {
   let lastMessages: unknown[] = [];
-
+  let lastTodos: unknown[] = [];
   for await (const chunk of stream) {
     options?.onProgress?.();
 
     console.log("chunk", chunk);
 
-    const messages = messagesFromValuesChunk(chunk);
+    const { messages, todos } = messagesFromValuesChunk(chunk);
+    if (todos.length > 0) {
+      lastTodos = todos;
+    }
     if (messages.length > 0) {
       lastMessages = messages;
     }
   }
 
-  return lastMessages;
+  return { messages: lastMessages, todos: lastTodos };
 }
 
 export function messageText(content: unknown): string {
