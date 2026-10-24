@@ -7,6 +7,7 @@ import {
   type WorkflowAgentMessage,
   type WorkflowPipelineState,
 } from "./workflow-types";
+import { extractMustFixForBuilder } from "./review-parse";
 
 const { createSandbox } = proxyActivities<typeof activities>({
   startToCloseTimeout: "15 minutes",
@@ -27,13 +28,20 @@ const {
   },
 });
 
-const { runPlannerActivity, runDesignerActivity, runBuilderActivity } = proxyActivities<typeof activities>({
+const {
+  runPlannerActivity,
+  runDesignerActivity,
+  runBuilderActivity,
+  runReviewerActivity,
+} = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   heartbeatTimeout: "30 seconds",
   retry: {
     maximumAttempts: 3,
   },
 });
+
+const REVIEW_FIX_ROUNDS = 3;
 
 export interface CodeAgentInput {
   projectId: string;
@@ -58,12 +66,24 @@ export async function codeAgentWorkflow(input: CodeAgentInput) {
   // running the planner agent activity
   state = await runPlannerActivity(createAgentBasePayload(input, state));
   state = await runDesignerActivity(createAgentBasePayload(input, state));
-  state = await runBuilderActivity({...createAgentBasePayload(input, state), 
-     task: "build the full React + tailwind app from the design document" }
-  );
+  state = await runBuilderActivity({
+    ...createAgentBasePayload(input, state),
+    task: "build the full React + tailwind app from the design document",
+  });
 
+  for (let round = 0; round < REVIEW_FIX_ROUNDS; round++) {
+    state = await runReviewerActivity(createAgentBasePayload(input, state));
+    const mustFix = extractMustFixForBuilder(state.review);
+    if (!mustFix) {
+      break;
+    }
+    state = await runBuilderActivity({
+      ...createAgentBasePayload(input, state),
+      task: `Fix the following MUST FIX items from code review. Only change what is required.\n\n${mustFix}`,
+      fixPass: true,
+    });
+  }
 
-  
 
   const SAMPLE_SUMMARY = "A custom React app tailored to create TODO list app"; // once coding agent is completed this will be coming from the agent
   const title = await generateTitle(SAMPLE_SUMMARY) ;

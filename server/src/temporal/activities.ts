@@ -7,7 +7,12 @@ import {
 } from "../lib/sandbox";
 
 export { loadMessages, saveResult } from "../repository/message.repository";
-export { runPlannerActivity, runDesignerActivity, runBuilderActivity } from "./agent-activities";
+export {
+  runPlannerActivity,
+  runDesignerActivity,
+  runBuilderActivity,
+  runReviewerActivity,
+} from "./agent-activities";
 
 /** Provisions (or reconnects) the E2B sandbox for a project and bootstraps the workdir. */
 export async function createSandbox(projectId: string): Promise<string> {

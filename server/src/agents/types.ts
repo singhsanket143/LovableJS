@@ -49,3 +49,16 @@ export interface BuilderResult {
     thread: AgentChatMessage[];
     files: FileCollection;
 }
+
+export interface ReviewerInput extends AgentRunHooks {
+    thread: AgentChatMessage[];
+    sandboxId: string;
+    files: FileCollection;
+    design: string;
+    task: string;
+}
+
+export interface ReviewerResult {
+    review: string;
+    thread: AgentChatMessage[];
+}

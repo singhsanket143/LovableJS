@@ -7,6 +7,7 @@ import { serializePlanMessage, TodoItem, updateTodoStatusForSubagent } from "../
 import { savePlanMessage } from "../repository/message.repository";
 import { runDesigner } from "../agents/designer/run";
 import { runBuilder } from "../agents/builder/run";
+import { runReviewer } from "../agents/reviewer/run";
 import { readSandboxTree } from "../lib/sandbox";
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
@@ -138,8 +139,51 @@ export async function runDesignerActivity(
     })
 }
 
+export async function runReviewerActivity(
+  input: AgentBasePayload,
+): Promise<WorkflowPipelineState> {
+    if (!hasLlm()) {
+        return { ...input.state };
+    }
+
+    return withHeartbeat(async (beat) => {
+        const state = { ...input.state };
+
+        await syncPlan(input.projectId, state, state.todos, {
+            agent: "reviewer",
+            detail: "reviewing the app",
+        });
+
+        const result = await runReviewer({
+            sandboxId: input.sandboxId,
+            task: input.prompt,
+            design: state.design,
+            files: state.files,
+            thread: state.thread,
+            signal: cancellationSignal(),
+            onProgress: beat,
+            onTodos: async (_todos, activity) => {
+                if (activity) {
+                    await syncPlan(input.projectId, state, state.todos, activity);
+                }
+                beat();
+            },
+        });
+
+        state.thread = result.thread;
+        state.review = result.review;
+
+        await syncPlan(input.projectId, state, state.todos, {
+            agent: "reviewer",
+            detail: "review complete",
+        });
+
+        return state;
+    });
+}
+
 export async function runBuilderActivity(
-  input: AgentBasePayload & { task: string },
+  input: AgentBasePayload & { task: string; fixPass?: boolean },
 ): Promise<WorkflowPipelineState> {
     if(!hasLlm()) {
         return {...input.state};
@@ -150,7 +194,9 @@ export async function runBuilderActivity(
 
         await syncPlan(input.projectId, state, state.todos, {
             agent: "builder",
-            detail: "building the app",
+            detail: input.fixPass
+                ? "fixing must-fix items from review"
+                : "building the app",
         });
 
         const result = await runBuilder({
@@ -174,11 +220,19 @@ export async function runBuilderActivity(
         state.files = await readSandboxTree(input.sandboxId);
         state.builderNotes = result.notes;
 
-        state.todos = updateTodoStatusForSubagent(state.todos, "build_app", "complete"); // move the build related todos to complete status from in_progress status
+        if (!input.fixPass) {
+            state.todos = updateTodoStatusForSubagent(
+                state.todos,
+                "build_app",
+                "complete",
+            );
+        }
 
         await syncPlan(input.projectId, state, state.todos, {
             agent: "builder",
-            detail: "builder complete. handing off to reviewer",
+            detail: input.fixPass
+                ? "fixes applied; ready for another review"
+                : "builder complete. handing off to reviewer",
         });
 
         return state;
