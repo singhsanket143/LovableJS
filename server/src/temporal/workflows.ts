@@ -8,8 +8,14 @@ import {
   type WorkflowPipelineState,
 } from "./workflow-types";
 
+const { createSandbox } = proxyActivities<typeof activities>({
+  startToCloseTimeout: "15 minutes",
+  retry: {
+    maximumAttempts: 3,
+  },
+});
+
 const {
-  createSandbox,
   saveResult,
   generateTitle,
   generateResponse,
@@ -39,7 +45,8 @@ export async function pingWorkflow(name: string): Promise<string> {
 }
 
 export async function codeAgentWorkflow(input: CodeAgentInput) {
-  const sandboxId =await createSandbox(input.projectId);
+  // E2B provision + bootstrap (npm deps, compile script). Agent file ops key off projectId.
+  await createSandbox(input.projectId);
   const previousMessages = await loadMessages(input.projectId);
 
   const thread = previousMessages.length > 0 ? [...previousMessages] : [
