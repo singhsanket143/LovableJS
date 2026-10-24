@@ -19,6 +19,16 @@ export async function findProjectById(id: string): Promise<Project | null> {
   });
 }
 
+export async function updateProjectE2bSandboxId(
+  projectId: string,
+  e2bSandboxId: string,
+): Promise<void> {
+  await prisma.project.update({
+    where: { id: projectId },
+    data: { e2bSandboxId },
+  });
+}
+
 type CreateProjectWithMessageInput = {
   name: string;
   messageContent: string;

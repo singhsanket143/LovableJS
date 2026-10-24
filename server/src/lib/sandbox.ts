@@ -1,46 +1,51 @@
-import { exec, type ExecException } from "child_process";
-import * as esbuild from "esbuild";
+import { CommandExitError, FileType, Sandbox } from "e2b";
 import fs from "fs/promises";
 import path from "path";
-import { promisify } from "util";
 
-import { sandboxRoot } from "../config/constants";
+import {
+  findProjectById,
+  updateProjectE2bSandboxId,
+} from "../repository/project.repository";
 
-const serverNodeModules = path.resolve(__dirname, "../../node_modules");
+export const SANDBOX_WORKDIR = "/home/user/app";
+const COMPILE_SCRIPT_NAME = ".lovable-compile.mjs";
+const COMPILE_SCRIPT_SOURCE_PATH = path.resolve(
+  __dirname,
+  "../../scripts/sandbox-compile-preview.mjs",
+);
 
-const PREVIEW_ENTRY_CANDIDATES = [
-  "src/App.tsx",
-  "src/App.jsx",
-  "app/page.tsx",
-  "src/app/page.tsx",
-  "App.tsx",
-  "App.jsx",
-  "src/main.tsx",
-  "main.tsx",
-] as const;
+const SANDBOX_COMMAND_TIMEOUT_MS = 60_000;
+const NPM_BOOTSTRAP_TIMEOUT_MS = 300_000;
 
-const PREVIEW_BOOTSTRAP_FILE = ".preview-bootstrap.tsx";
-
-export type FileCollection = Record<string, string>; // relative path to the file content
+export type FileCollection = Record<string, string>;
 
 export type SandboxFileContent = {
   path: string;
   content: string;
 };
 
-function assertPathInsideRoot(
-  root: string,
-  targetPath: string,
-  errorMessage = "Invalid path",
-): void {
-  const relative = path.relative(root, targetPath);
-  if (relative.startsWith("..") || path.isAbsolute(relative)) {
-    throw new Error(errorMessage);
-  }
-}
+const SKIP_DIRS = new Set([
+  "node_modules",
+  "dist",
+  "build",
+  "out",
+  "target",
+  "tmp",
+  "temp",
+  "cache",
+  ".git",
+]);
+const SKIP_FILES = new Set([
+  "package-lock.json",
+  "yarn.lock",
+  "pnpm-lock.yaml",
+]);
+const MAX_TRACKED_BYTE_SIZE = 1024 * 1024 * 10;
 
-function assertSandboxPathInsideRoot(sandboxPath: string): void {
-  assertPathInsideRoot(sandboxRoot, sandboxPath, "Invalid sandbox ID");
+function assertProjectId(projectId: string): void {
+  if (!projectId || projectId.includes("..") || path.isAbsolute(projectId)) {
+    throw new Error("Invalid sandbox ID");
+  }
 }
 
 function sanitizeSandboxRelativePath(relativePath: string): string {
@@ -58,7 +63,7 @@ function sanitizeSandboxRelativePath(relativePath: string): string {
     safeSegments.push(segment);
   }
 
-  const cleaned = safeSegments.join(path.sep);
+  const cleaned = safeSegments.join("/");
   if (!cleaned) {
     throw new Error("Invalid file path");
   }
@@ -66,68 +71,15 @@ function sanitizeSandboxRelativePath(relativePath: string): string {
   return cleaned;
 }
 
-export async function ensureSandbox(sandboxId: string): Promise<string> {
-  const sandboxPath = resolveSandboxDir(sandboxId);
-  await fs.mkdir(sandboxPath, { recursive: true });
-  return sandboxPath;
-}
-
-export async function writeSandboxFiles(
-  sandboxId: string,
-  fileCollection: FileCollection,
-): Promise<string> {
-  const sandboxDir = await ensureSandbox(sandboxId);
-
-  await Promise.all(
-    Object.entries(fileCollection).map(async ([relativePath, content]) => {
-      const { filePath } = resolveSandboxFilePath(sandboxDir, relativePath);
-      await fs.mkdir(path.dirname(filePath), { recursive: true });
-      await fs.writeFile(filePath, content, "utf8");
-    }),
-  );
-
-  return sandboxDir;
-}
-
-function resolveSandboxDir(sandboxId: string): string {
-  if (!sandboxId || sandboxId.includes("..") || path.isAbsolute(sandboxId)) {
-    throw new Error("Invalid sandbox ID");
+function toSandboxAbsolute(relativePath: string): string {
+  const cleaned = sanitizeSandboxRelativePath(relativePath);
+  const absolute = path.posix.join(SANDBOX_WORKDIR, cleaned);
+  const relative = path.posix.relative(SANDBOX_WORKDIR, absolute);
+  if (relative.startsWith("..") || path.posix.isAbsolute(relative)) {
+    throw new Error(`Unsafe file path: ${relativePath}`);
   }
-
-  const sandboxDir = path.resolve(sandboxRoot, sandboxId);
-  assertSandboxPathInsideRoot(sandboxDir);
-  return sandboxDir;
+  return absolute;
 }
-
-function resolveSandboxFilePath(
-  sandboxDir: string,
-  relativePath: string,
-): { cleanedPath: string; filePath: string } {
-  const cleanedPath = sanitizeSandboxRelativePath(relativePath);
-  const filePath = path.resolve(sandboxDir, cleanedPath);
-  assertPathInsideRoot(sandboxDir, filePath, `Unsafe file path: ${relativePath}`);
-  return { cleanedPath, filePath };
-}
-
-export async function readSandboxFiles(
-  sandboxId: string,
-  relativePaths: string[],
-): Promise<SandboxFileContent[]> {
-  const sandboxDir = resolveSandboxDir(sandboxId);
-
-  return Promise.all(
-    relativePaths.map(async (relativePath) => {
-      const { cleanedPath, filePath } = resolveSandboxFilePath(sandboxDir, relativePath);
-      const content = await fs.readFile(filePath, "utf8");
-      return { path: cleanedPath, content };
-    }),
-  );
-}
-
-const execAsync = promisify(exec);
-
-const SANDBOX_COMMAND_TIMEOUT_MS = 60_000;
-const SANDBOX_COMMAND_MAX_BUFFER = 1024 * 1024; // 1MB
 
 function formatCommandSuccess(stdout: string, stderr: string): string {
   const trimmedStdout = stdout.trim();
@@ -150,31 +102,133 @@ function formatCommandFailure(
   return parts.join("\n\n");
 }
 
-function asExecException(error: unknown): ExecException | null {
-  if (!(error instanceof Error)) return null;
-  if (!("stdout" in error || "stderr" in error)) return null;
-  return error as ExecException;
+async function getProjectE2bSandboxId(projectId: string): Promise<string> {
+  assertProjectId(projectId);
+  const project = await findProjectById(projectId);
+  if (!project?.e2bSandboxId) {
+    throw new Error(
+      `No E2B sandbox for project ${projectId}. Run createSandbox first.`,
+    );
+  }
+  return project.e2bSandboxId;
+}
+
+async function connectProjectSandbox(projectId: string): Promise<Sandbox> {
+  const e2bSandboxId = await getProjectE2bSandboxId(projectId);
+  return Sandbox.connect(e2bSandboxId);
+}
+
+async function bootstrapSandbox(sandbox: Sandbox): Promise<void> {
+  await sandbox.commands.run(`mkdir -p ${SANDBOX_WORKDIR}`, {
+    timeoutMs: SANDBOX_COMMAND_TIMEOUT_MS,
+  });
+
+  const compileScriptSource = await fs.readFile(
+    COMPILE_SCRIPT_SOURCE_PATH,
+    "utf8",
+  );
+  await sandbox.files.write(
+    `${SANDBOX_WORKDIR}/${COMPILE_SCRIPT_NAME}`,
+    compileScriptSource,
+  );
+
+  await sandbox.commands.run(
+    "npm install react react-dom esbuild lucide-react --yes",
+    {
+      cwd: SANDBOX_WORKDIR,
+      timeoutMs: NPM_BOOTSTRAP_TIMEOUT_MS,
+    },
+  );
+}
+
+async function ensureSandboxReady(sandbox: Sandbox): Promise<void> {
+  try {
+    await sandbox.files.read(`${SANDBOX_WORKDIR}/${COMPILE_SCRIPT_NAME}`);
+    await sandbox.files.read(
+      `${SANDBOX_WORKDIR}/node_modules/react/package.json`,
+    );
+  } catch {
+    await bootstrapSandbox(sandbox);
+  }
+}
+
+/** Creates or reconnects the E2B sandbox for a project (idempotent for Temporal retries). */
+export async function provisionProjectSandbox(projectId: string): Promise<string> {
+  assertProjectId(projectId);
+  const project = await findProjectById(projectId);
+  if (!project) {
+    throw new Error(`Project not found: ${projectId}`);
+  }
+
+  if (project.e2bSandboxId) {
+    const existing = await Sandbox.connect(project.e2bSandboxId);
+    await ensureSandboxReady(existing);
+    return projectId;
+  }
+
+  const sandbox = await Sandbox.create();
+  await updateProjectE2bSandboxId(projectId, sandbox.sandboxId);
+  await bootstrapSandbox(sandbox);
+  return projectId;
+}
+
+export async function ensureSandbox(projectId: string): Promise<string> {
+  await getProjectE2bSandboxId(projectId);
+  return SANDBOX_WORKDIR;
+}
+
+export async function writeSandboxFiles(
+  projectId: string,
+  fileCollection: FileCollection,
+): Promise<string> {
+  const sandbox = await connectProjectSandbox(projectId);
+  const entries = Object.entries(fileCollection).map(
+    ([relativePath, content]) => ({
+      path: toSandboxAbsolute(relativePath),
+      data: content,
+    }),
+  );
+
+  if (entries.length > 0) {
+    await sandbox.files.write(entries);
+  }
+
+  return SANDBOX_WORKDIR;
+}
+
+export async function readSandboxFiles(
+  projectId: string,
+  relativePaths: string[],
+): Promise<SandboxFileContent[]> {
+  const sandbox = await connectProjectSandbox(projectId);
+
+  return Promise.all(
+    relativePaths.map(async (relativePath) => {
+      const cleanedPath = sanitizeSandboxRelativePath(relativePath);
+      const absolutePath = toSandboxAbsolute(relativePath);
+      const content = await sandbox.files.read(absolutePath);
+      return { path: cleanedPath, content };
+    }),
+  );
 }
 
 export async function runSandboxCommand(
-  sandboxId: string,
+  projectId: string,
   command: string,
 ): Promise<string> {
   try {
-    const sandboxDir = await ensureSandbox(sandboxId);
-    const { stdout, stderr } = await execAsync(command, {
-      cwd: sandboxDir,
-      timeout: SANDBOX_COMMAND_TIMEOUT_MS,
-      maxBuffer: SANDBOX_COMMAND_MAX_BUFFER,
+    const sandbox = await connectProjectSandbox(projectId);
+    const result = await sandbox.commands.run(command, {
+      cwd: SANDBOX_WORKDIR,
+      timeoutMs: SANDBOX_COMMAND_TIMEOUT_MS,
     });
-    return formatCommandSuccess(String(stdout), String(stderr));
+    return formatCommandSuccess(result.stdout, result.stderr);
   } catch (error) {
-    const execError = asExecException(error);
-    if (execError) {
+    if (error instanceof CommandExitError) {
       return formatCommandFailure(
-        execError.message,
-        String(execError.stdout ?? ""),
-        String(execError.stderr ?? ""),
+        error.message,
+        error.stdout,
+        error.stderr,
       );
     }
     return formatCommandFailure(
@@ -183,171 +237,89 @@ export async function runSandboxCommand(
   }
 }
 
-const SKIP_DIRS = new Set(["node_modules", "dist", "build", "out", "target", "tmp", "temp", "cache", ".git"]);
-const SKIP_FILES = new Set(["package-lock.json", "yarn.lock", "pnpm-lock.yaml"]);
-const MAX_TRACKED_BYTE_SIZE = 1024 * 1024 * 10; // 10MB
-
-export async function readSandboxTree(sandboxId: string): Promise<FileCollection> {
-    const root = path.join(sandboxRoot, sandboxId);
-    assertSandboxPathInsideRoot(root);
-
-    const files: FileCollection = {};
-
-    const walk = async (current: string) => {
-        let entries = [];
-
-        try {
-            entries = await fs.readdir(current, { withFileTypes: true });
-        } catch {
-            return;
-        }
-
-        for (const entry of entries) {
-            if (entry.name.startsWith(".")) continue;
-            const fullPath = path.join(current, entry.name);
-            if(entry.isDirectory()) {
-                if(!SKIP_DIRS.has(entry.name)) await walk(fullPath);
-                continue;
-            }
-            if(!entry.isFile() || SKIP_FILES.has(entry.name)) continue;
-
-            try {
-                const stat = await fs.stat(fullPath); // stat or metadata of the file  
-                if(stat.size > MAX_TRACKED_BYTE_SIZE) continue;
-
-                files[path.relative(root, fullPath)] = await fs.readFile(fullPath, "utf8");
-            } catch {
-
-            }
-
-        }
-
-    }
-
-    await walk(root);
-
-
-    return files;
+function toWorkdirRelative(absolutePath: string): string {
+  const relative = path.posix.relative(SANDBOX_WORKDIR, absolutePath);
+  return relative.split(path.sep).join("/");
 }
 
-async function findSandboxAppEntry(sandboxDir: string): Promise<string> {
-  for (const candidate of PREVIEW_ENTRY_CANDIDATES) {
+export async function readSandboxTree(projectId: string): Promise<FileCollection> {
+  const sandbox = await connectProjectSandbox(projectId);
+  const files: FileCollection = {};
+
+  const walk = async (directory: string) => {
+    let entries;
     try {
-      await fs.access(path.join(sandboxDir, candidate));
-      return candidate;
+      entries = await sandbox.files.list(directory);
     } catch {
-      continue;
+      return;
     }
-  }
 
-  throw new Error(
-    `No preview entry found in sandbox. Tried: ${PREVIEW_ENTRY_CANDIDATES.join(", ")}`,
-  );
+    for (const entry of entries) {
+      if (entry.name.startsWith(".")) continue;
+
+      if (entry.type === FileType.DIR) {
+        if (!SKIP_DIRS.has(entry.name)) {
+          await walk(entry.path);
+        }
+        continue;
+      }
+
+      if (entry.type !== FileType.FILE || SKIP_FILES.has(entry.name)) {
+        continue;
+      }
+
+      if (entry.size > MAX_TRACKED_BYTE_SIZE) continue;
+
+      try {
+        const relative = toWorkdirRelative(entry.path);
+        if (!relative || relative.startsWith("..")) continue;
+        files[relative] = await sandbox.files.read(entry.path);
+      } catch {
+        // skip unreadable files
+      }
+    }
+  };
+
+  await walk(SANDBOX_WORKDIR);
+  return files;
 }
 
-function previewBootstrapSource(appEntryRelative: string): string {
-  const importPath = `./${appEntryRelative.replace(/\\/g, "/")}`;
-  return `import React from "react";
-import { createRoot } from "react-dom/client";
-import App from ${JSON.stringify(importPath)};
-
-const container = document.getElementById("root");
-if (container) {
-  createRoot(container).render(React.createElement(App));
-}
-`;
-}
-
-function previewHtmlDocument(script: string): string {
-  return `<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <script src="https://cdn.tailwindcss.com"></script>
-    <title>Sandbox preview</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script>${script}</script>
-  </body>
-</html>
-`;
-}
-
-export async function compileSandbox(sandboxId: string): Promise<string> {
-  const sandboxDir = resolveSandboxDir(sandboxId);
-  await fs.mkdir(sandboxDir, { recursive: true });
-
-  const appEntry = await findSandboxAppEntry(sandboxDir);
-  const bootstrapPath = path.join(sandboxDir, PREVIEW_BOOTSTRAP_FILE);
-  const bootstrapSource = previewBootstrapSource(appEntry);
-
-  await fs.writeFile(bootstrapPath, bootstrapSource, "utf8");
+export async function compileSandbox(projectId: string): Promise<string> {
+  const sandbox = await connectProjectSandbox(projectId);
 
   try {
-    const result = await esbuild.build({
-      absWorkingDir: sandboxDir,
-      entryPoints: [bootstrapPath],
-      bundle: true,
-      format: "iife",
-      platform: "browser",
-      target: ["es2020"],
-      jsx: "automatic",
-      jsxImportSource: "react",
-      loader: {
-        ".tsx": "tsx",
-        ".ts": "ts",
-        ".jsx": "jsx",
-        ".js": "js",
+    const result = await sandbox.commands.run(
+      `node ${COMPILE_SCRIPT_NAME}`,
+      {
+        cwd: SANDBOX_WORKDIR,
+        timeoutMs: SANDBOX_COMMAND_TIMEOUT_MS,
       },
-      nodePaths: [serverNodeModules],
-      define: {
-        "process.env.NODE_ENV": JSON.stringify("production"),
-      },
-      write: false,
-      logLevel: "silent",
-    });
+    );
 
-    const output = result.outputFiles?.[0]?.text;
-    if (!output) {
-      throw new Error("esbuild produced no output");
+    const html = result.stdout;
+    if (!html.trim()) {
+      throw new Error(
+        result.stderr.trim() || "Compile produced no HTML output",
+      );
     }
 
-    return previewHtmlDocument(output);
-  } finally {
-    await fs.unlink(bootstrapPath).catch(() => undefined);
+    return html;
+  } catch (error) {
+    if (error instanceof CommandExitError) {
+      const detail = error.stderr.trim() || error.stdout.trim() || error.message;
+      throw new Error(detail);
+    }
+    throw error;
   }
 }
 
-function formatCompileError(error: unknown): string {
-  if (error && typeof error === "object" && "errors" in error) {
-    const failures = (error as esbuild.BuildFailure).errors;
-    if (failures.length > 0) {
-      return failures
-        .map((item) => {
-          const location = item.location;
-          const where = location
-            ? `${location.file}:${location.line}:${location.column}`
-            : "bundle";
-          return `${where}: ${item.text}`;
-        })
-        .join("\n");
-    }
-  }
-
-  return error instanceof Error ? error.message : String(error);
-}
-
-/** Same as preview compile; returns a short agent-facing status string (not HTML). */
-export async function compileSandboxCheck(sandboxId: string): Promise<string> {
+export async function compileSandboxCheck(projectId: string): Promise<string> {
   try {
-    const html = await compileSandbox(sandboxId);
+    const html = await compileSandbox(projectId);
     const kilobytes = Math.round(Buffer.byteLength(html, "utf8") / 1024);
     return `SUCCESS: Preview bundle compiled (${kilobytes} KB HTML). No esbuild errors.`;
   } catch (error) {
-    return `COMPILE FAILED:\n${formatCompileError(error)}`;
+    const message = error instanceof Error ? error.message : String(error);
+    return `COMPILE FAILED:\n${message}`;
   }
 }
-
-

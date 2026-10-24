@@ -1,12 +1,16 @@
 import { runPlainPrompt } from "../lib/llm";
 import { FRAGMENT_TITLE_PROMPT, RESPONSE_PROMPT } from "../lib/prompt";
-import { FileCollection, readSandboxTree } from "../lib/sandbox";
+import {
+  FileCollection,
+  provisionProjectSandbox,
+  readSandboxTree,
+} from "../lib/sandbox";
 
 export { loadMessages, saveResult } from "../repository/message.repository";
 export { runPlannerActivity, runDesignerActivity, runBuilderActivity } from "./agent-activities";
 
 export async function createSandbox(projectId: string) {
-  return projectId;
+  return provisionProjectSandbox(projectId);
 }
 
 export async function loadSandboxFiles(sandboxId: string): Promise<FileCollection> {
