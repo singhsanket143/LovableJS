@@ -6,6 +6,7 @@ import { hasLlm } from "../lib/model";
 import { serializePlanMessage, TodoItem, updateTodoStatusForSubagent } from "../lib/plan";
 import { savePlanMessage } from "../repository/message.repository";
 import { runDesigner } from "../agents/designer/run";
+import { runBuilder } from "../agents/builder/run";
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
 
@@ -130,6 +131,53 @@ export async function runDesignerActivity(
         await syncPlan(input.projectId, state, state.todos, {
           agent: "designer",
           detail: "design complete. handing off to builder",
+        });
+
+        return state;
+    })
+}
+
+export async function runBuilderActivity(
+  input: AgentBasePayload & { task: string },
+): Promise<WorkflowPipelineState> {
+    if(!hasLlm()) {
+        return {...input.state};
+    }
+
+    return withHeartbeat(async (beat) => {
+        const state = { ...input.state };
+
+        await syncPlan(input.projectId, state, state.todos, {
+            agent: "builder",
+            detail: "building the app",
+        });
+
+        const result = await runBuilder({
+            sandboxId: input.sandboxId,
+            task: input.task,
+            design: input.state.design,
+            files: input.state.files,
+            thread: input.state.thread,
+            todos: state.todos,
+            signal: cancellationSignal(),
+            onProgress: beat,
+            onTodos: async (_todos, activity) => {
+              if(activity) {
+                await syncPlan(input.projectId, state, state.todos, activity);
+              }
+              beat();
+            }
+        });
+
+        state.thread = result.thread;
+        state.files = result.files;
+        state.builderNotes = result.notes;
+
+        state.todos = updateTodoStatusForSubagent(state.todos, "build_app", "complete"); // move the build related todos to complete status from in_progress status
+
+        await syncPlan(input.projectId, state, state.todos, {
+            agent: "builder",
+            detail: "builder complete. handing off to reviewer",
         });
 
         return state;

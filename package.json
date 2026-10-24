@@ -15,5 +15,8 @@
   },
   "workspaces": [
     "server"
-  ]
+  ],
+  "dependencies": {
+    "lucide-react": "^1.61.0"
+  }
 }

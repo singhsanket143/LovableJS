@@ -1,4 +1,5 @@
 import { TodoItem } from "../lib/plan";
+import { FileCollection } from "../lib/sandbox";
 
 export interface AgentChatMessage {
     role: "user" | "assistant" | "system";
@@ -32,4 +33,19 @@ export interface DesignerInput extends AgentRunHooks {
 export interface DesignerResult {
     design: string;
     thread: AgentChatMessage[];
+}
+
+export interface BuilderInput extends AgentRunHooks {
+    todos: TodoItem[];
+    thread: AgentChatMessage[];
+    sandboxId: string;
+    files: FileCollection;
+    design: string;
+    task: string;
+}
+
+export interface BuilderResult {
+    notes: string;
+    thread: AgentChatMessage[];
+    files: FileCollection;
 }

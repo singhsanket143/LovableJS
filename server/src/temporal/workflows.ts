@@ -21,7 +21,7 @@ const {
   },
 });
 
-const { runPlannerActivity, runDesignerActivity } = proxyActivities<typeof activities>({
+const { runPlannerActivity, runDesignerActivity, runBuilderActivity } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   heartbeatTimeout: "30 seconds",
   retry: {
@@ -51,6 +51,9 @@ export async function codeAgentWorkflow(input: CodeAgentInput) {
   // running the planner agent activity
   state = await runPlannerActivity(createAgentBasePayload(input, state));
   state = await runDesignerActivity(createAgentBasePayload(input, state));
+  state = await runBuilderActivity({...createAgentBasePayload(input, state), 
+     task: "build the full React + tailwind app from the design document" }
+  );
 
 
   

@@ -70,3 +70,18 @@ export function lastAssistantText(messages: unknown[]): string {
     }
     return "";
 }
+
+export function isRecurionLimitExceeded(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+
+  const record = error as {
+    message?: string;
+    lc_code_code?: string;
+    name?: string;
+  };
+  return (
+    record.message?.includes("Recursion limit exceeded") ||
+    record.lc_code_code === "GRAPH_RECURSION_LIMIT" ||
+    record.name === "GraphRecursionError"
+  );
+}

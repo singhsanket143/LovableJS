@@ -3,7 +3,7 @@ import { FRAGMENT_TITLE_PROMPT, RESPONSE_PROMPT } from "../lib/prompt";
 import { FileCollection, readSandboxTree } from "../lib/sandbox";
 
 export { loadMessages, saveResult } from "../repository/message.repository";
-export { runPlannerActivity, runDesignerActivity } from "./agent-activities";
+export { runPlannerActivity, runDesignerActivity, runBuilderActivity } from "./agent-activities";
 
 export async function createSandbox(projectId: string) {
   return projectId;
