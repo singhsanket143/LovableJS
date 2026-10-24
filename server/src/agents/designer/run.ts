@@ -5,6 +5,7 @@ import { DESIGNER_PROMPT } from "./prompt";
 import { env } from "../../config/env";
 import { lastAssistantText, streamAgentValues } from "../shared/langchain";
 import { appendAgentMessage } from "../shared/handoff";
+import { formatDesignStepsForDesigner } from "./format-design-steps";
 
 export async function runDesigner(input: DesignerInput) : Promise<DesignerResult> {
     if(!hasLlm()) {
@@ -21,12 +22,20 @@ export async function runDesigner(input: DesignerInput) : Promise<DesignerResult
     });
 
     const history = input.thread;
+    const designSteps = formatDesignStepsForDesigner(input.todos);
 
-    const contextTillNow = history.length ? 
-    `User Request:\n${input.prompt}\n\nThread so far:\n
-    ${history.map((msg) => `${msg.role}: ${msg.content}`).join("\n\n")}
-    `: input.prompt;
+    const baseContext = history.length
+      ? [
+          `User Request:\n${input.prompt}`,
+          `Thread so far:\n${history.map((msg) => `${msg.role}: ${msg.content}`).join("\n\n")}`,
+        ].join("\n\n")
+      : input.prompt;
 
+    const contextTillNow = designSteps
+      ? [baseContext, designSteps].join("\n\n")
+      : baseContext;
+
+    console.log("contextTillNow", contextTillNow);
     
     const agentInput = {
         messages: [{

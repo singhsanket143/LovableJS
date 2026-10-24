@@ -108,6 +108,7 @@ export async function runDesignerActivity(
 
         const result = await runDesigner({
           prompt: input.prompt,
+          todos: state.todos,
           thread: state.thread,
           signal: cancellationSignal(),
           onProgress: beat,
@@ -121,6 +122,10 @@ export async function runDesignerActivity(
 
         state.thread = result.thread;
         state.design = result.design;
+
+        state.todos = updateTodoStatusForSubagent(state.todos, "design_app", "complete"); // move the design related todos to complete status from in_progress status
+
+        state.todos = updateTodoStatusForSubagent(state.todos, "build_app", "start"); // move the build related todos to in_progress status from pending status
 
         await syncPlan(input.projectId, state, state.todos, {
           agent: "designer",

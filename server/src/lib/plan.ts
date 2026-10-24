@@ -82,7 +82,7 @@ export function parsePhase(_value: unknown, content: string): TodoPhase {
 }
 
 const STATUS_TRANSITIONS: Record<TodoStatus, TodoStatus[]> = { // graph edges
-    pending: ["in_progress"],
+    pending: ["in_progress", "completed"],
     in_progress: ["completed", "cancelled"],
     completed: [],
     cancelled: [],
