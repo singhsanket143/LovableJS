@@ -23,12 +23,13 @@ enum MessageType {
 }
 
 model Project {
-  id        String    @id @default(cuid())
-  name      String
-  userId    String
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id            String    @id @default(cuid())
+  name          String
+  userId        String
+  e2bSandboxId  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  messages      Message[]
 
   @@index([userId])
 }
