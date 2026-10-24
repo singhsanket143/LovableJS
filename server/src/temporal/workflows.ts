@@ -21,7 +21,7 @@ const {
   },
 });
 
-const { runPlannerActivity } = proxyActivities<typeof activities>({
+const { runPlannerActivity, runDesignerActivity } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   heartbeatTimeout: "30 seconds",
   retry: {
@@ -49,7 +49,8 @@ export async function codeAgentWorkflow(input: CodeAgentInput) {
   let state: WorkflowPipelineState = emptyPipelineState(thread as WorkflowAgentMessage[]); // input in the temporal activity
 
   // running the planner agent activity
-  state = await runPlannerActivity(createAgentBasePayload(input, state))
+  state = await runPlannerActivity(createAgentBasePayload(input, state));
+  state = await runDesignerActivity(createAgentBasePayload(input, state));
 
 
   

@@ -5,6 +5,7 @@ import type { AgentBasePayload, WorkflowPipelineState } from "./workflow-types";
 import { hasLlm } from "../lib/model";
 import { serializePlanMessage, TodoItem, updateTodoStatusForSubagent } from "../lib/plan";
 import { savePlanMessage } from "../repository/message.repository";
+import { runDesigner } from "../agents/designer/run";
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
 
@@ -87,4 +88,45 @@ export async function runPlannerActivity(
 
     })
 
+}
+
+
+export async function runDesignerActivity(
+  input: AgentBasePayload,
+): Promise<WorkflowPipelineState> {
+    if(!hasLlm()) {
+        return {...input.state};
+    }
+
+    return withHeartbeat(async (beat) => {
+        const state = { ...input.state };
+
+        await syncPlan(input.projectId, state, state.todos, {
+          agent: "designer",
+          detail: "designing the ui",
+        });
+
+        const result = await runDesigner({
+          prompt: input.prompt,
+          thread: state.thread,
+          signal: cancellationSignal(),
+          onProgress: beat,
+          onTodos: async (_todos, activity) => {
+            if(activity) {
+              await syncPlan(input.projectId, state, state.todos, activity);
+            }
+            beat();
+          }
+        });
+
+        state.thread = result.thread;
+        state.design = result.design;
+
+        await syncPlan(input.projectId, state, state.todos, {
+          agent: "designer",
+          detail: "design complete. handing off to builder",
+        });
+
+        return state;
+    })
 }
