@@ -33,6 +33,7 @@ const {
   runDesignerActivity,
   runBuilderActivity,
   runReviewerActivity,
+  finalizePlanActivity,
 } = proxyActivities<typeof activities>({
   startToCloseTimeout: "10 minutes",
   heartbeatTimeout: "30 seconds",
@@ -84,6 +85,7 @@ export async function codeAgentWorkflow(input: CodeAgentInput) {
     });
   }
 
+  state = await finalizePlanActivity(createAgentBasePayload(input, state));
 
   const SAMPLE_SUMMARY = "A custom React app tailored to create TODO list app"; // once coding agent is completed this will be coming from the agent
   const title = await generateTitle(SAMPLE_SUMMARY) ;

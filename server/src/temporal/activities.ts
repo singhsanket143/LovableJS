@@ -12,6 +12,7 @@ export {
   runDesignerActivity,
   runBuilderActivity,
   runReviewerActivity,
+  finalizePlanActivity,
 } from "./agent-activities";
 
 /** Provisions (or reconnects) the E2B sandbox for a project and bootstraps the workdir. */

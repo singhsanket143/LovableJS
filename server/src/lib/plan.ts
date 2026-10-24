@@ -112,6 +112,7 @@ function applyStatus(todo: TodoItem, to: TodoStatus): TodoItem {
 
 const TOOL_NAME_TO_PHASE: Record<string, TodoPhase> = {
     "design_app": "design",
+    "build_app": "build",
     "build_ui": "build",
     "review_app": "review",
     "cancelled": "cancelled",
@@ -200,6 +201,44 @@ export function parsePlannerTodos(value: unknown): TodoItem[] {
     if(!Array.isArray(value)) return [];
     return value.map((item) => normalizeToDo(item))
     .filter((item): item is TodoItem => Boolean(item));
+}
+
+function todoContentKey(content: string): string {
+  return content.trim().toLowerCase();
+}
+
+/** Apply status (and phase when missing) from agent write_todos without dropping other plan steps. */
+export function mergeTodoStatusUpdates(
+  baseline: TodoItem[],
+  updates: TodoItem[],
+): TodoItem[] {
+  if (updates.length === 0) {
+    return baseline;
+  }
+
+  const updatesByKey = new Map(
+    updates.map((todo) => [todoContentKey(todo.content), todo]),
+  );
+
+  const merged = baseline.map((todo) => {
+    const update = updatesByKey.get(todoContentKey(todo.content));
+    if (!update) {
+      return todo;
+    }
+    return {
+      ...todo,
+      status: update.status,
+    };
+  });
+
+  for (const update of updates) {
+    const key = todoContentKey(update.content);
+    if (!merged.some((todo) => todoContentKey(todo.content) === key)) {
+      merged.push(update);
+    }
+  }
+
+  return merged;
 }
 
 export function parseTodos(value: unknown): TodoItem[] {

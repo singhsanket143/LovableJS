@@ -3,7 +3,11 @@ import { cancellationSignal, heartbeat } from "@temporalio/activity";
 import { runPlanner } from "../agents/planner/run";
 import type { AgentBasePayload, WorkflowPipelineState } from "./workflow-types";
 import { hasLlm } from "../lib/model";
-import { serializePlanMessage, TodoItem, updateTodoStatusForSubagent } from "../lib/plan";
+import {
+  mergeTodoStatusUpdates,
+  TodoItem,
+  updateTodoStatusForSubagent,
+} from "../lib/plan";
 import { savePlanMessage } from "../repository/message.repository";
 import { runDesigner } from "../agents/designer/run";
 import { runBuilder } from "../agents/builder/run";
@@ -211,7 +215,7 @@ export async function runBuilderActivity(
             onProgress: beat,
             onTodos: async (todos, activity) => {
               if (todos.length > 0) {
-                state.todos = todos;
+                state.todos = mergeTodoStatusUpdates(state.todos, todos);
               }
               if (activity) {
                 await syncPlan(input.projectId, state, state.todos, activity);
@@ -243,4 +247,19 @@ export async function runBuilderActivity(
 
         return state;
     })
+}
+
+export async function finalizePlanActivity(
+  input: AgentBasePayload,
+): Promise<WorkflowPipelineState> {
+  const state = { ...input.state };
+
+  state.todos = updateTodoStatusForSubagent(state.todos, "review_app", "complete");
+
+  await syncPlan(input.projectId, state, state.todos, {
+    agent: "workflow",
+    detail: "App generation complete",
+  });
+
+  return state;
 }

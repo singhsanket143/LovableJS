@@ -1,6 +1,6 @@
 import { createAgent, todoListMiddleware } from "langchain";
 import { getChatModel, hasLlm } from "../../lib/model";
-import { parsePlannerTodos } from "../../lib/plan";
+import { mergeTodoStatusUpdates, parsePlannerTodos } from "../../lib/plan";
 import { BuilderInput, BuilderResult } from "../types";
 import { createBuilderTools } from "./tools";
 import { env } from "../../config/env";
@@ -92,8 +92,8 @@ export async function runBuilder(input: BuilderInput): Promise<BuilderResult> {
         if (followPlannerPlan && result.todos.length > 0) {
             const streamedTodos = parsePlannerTodos(result.todos);
             if (streamedTodos.length > 0) {
-                planTodos = streamedTodos;
-                await input.onTodos?.(streamedTodos, null);
+                planTodos = mergeTodoStatusUpdates(input.todos, streamedTodos);
+                await input.onTodos?.(planTodos, null);
             }
         }
     } catch (error) {
