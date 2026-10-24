@@ -6,6 +6,12 @@ export const idParamsSchema = z.object({
 
 export type IdParams = z.infer<typeof idParamsSchema>;
 
+export const previewParamsSchema = z.object({
+  projectId: z.string().trim().min(1, "Project id is required"),
+});
+
+export type PreviewParams = z.infer<typeof previewParamsSchema>;
+
 export const createProjectBodySchema = z.object({
   message: z.string().trim().min(1, "Message is required"),
 });

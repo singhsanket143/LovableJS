@@ -25,22 +25,33 @@ function messagesFromValuesChunk(chunk: unknown): { todos: unknown[], messages: 
 
 export async function streamAgentValues(
   stream: AsyncIterable<unknown>,
-  options?: { onProgress?: () => void },
+  options?: {
+    onProgress?: () => void;
+    onMessages?: (messages: unknown[]) => void;
+  },
 ): Promise<{ messages: unknown[], todos: unknown[] }> {
   let lastMessages: unknown[] = [];
   let lastTodos: unknown[] = [];
-  for await (const chunk of stream) {
-    options?.onProgress?.();
+  try {
+    for await (const chunk of stream) {
+      options?.onProgress?.();
 
-    console.log("chunk", chunk);
+      console.log("chunk", chunk);
 
-    const { messages, todos } = messagesFromValuesChunk(chunk);
-    if (todos.length > 0) {
-      lastTodos = todos;
+      const { messages, todos } = messagesFromValuesChunk(chunk);
+      if (todos.length > 0) {
+        lastTodos = todos;
+      }
+      if (messages.length > 0) {
+        lastMessages = messages;
+        options?.onMessages?.(lastMessages);
+      }
     }
-    if (messages.length > 0) {
-      lastMessages = messages;
+  } catch (error) {
+    if (lastMessages.length > 0) {
+      options?.onMessages?.(lastMessages);
     }
+    throw error;
   }
 
   return { messages: lastMessages, todos: lastTodos };
@@ -60,13 +71,24 @@ export function messageText(content: unknown): string {
     }).join("\n").trim();
 }
 
+function isAssistantMessage(message: unknown): boolean {
+  if (!message || typeof message !== "object") return false;
+  const record = message as { type?: string; getType?: () => string };
+  if (record.type === "ai") return true;
+  if (typeof record.getType === "function" && record.getType() === "ai") {
+    return true;
+  }
+  return false;
+}
+
 export function lastAssistantText(messages: unknown[]): string {
     for (let index = messages.length - 1; index >= 0; index--) {
-        const message = messages[index] as { type?: string, content?: unknown };
-        const isAssistant = message?.type === "ai";
-        if(!isAssistant) continue;
-        const text = messageText(message.content);
-        if(text) return text;
+        const message = messages[index];
+        if (!isAssistantMessage(message)) continue;
+        const text = messageText(
+          (message as { content?: unknown }).content,
+        );
+        if (text) return text;
     }
     return "";
 }

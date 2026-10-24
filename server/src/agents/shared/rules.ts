@@ -22,6 +22,13 @@ Hard constraints:
 - Import lucide-react icons when useful.
 - Make it responsive.
 
+Icons (lucide-react only):
+- You may import ONLY from "lucide-react" using icons that exist in the Lucide set (generic UI icons).
+- Do NOT import brand, social, or trademark icons — they are NOT in lucide-react and will break the preview bundle. Never use: Instagram, Facebook, Twitter, X (logo), YouTube, LinkedIn, TikTok, GitHub (logo), Apple, Google, Amazon, Discord, Slack, etc.
+- For footer/social links use generic icons instead, e.g. Share2, Link, Globe, Mail, ExternalLink, or text labels ("Instagram", "X") with no logo icon.
+- If a fix task mentions "No matching export" for lucide-react, replace those imports with valid generic icons from the same package — do not add another icon library unless the task explicitly allows npm install.
+- Prefer a small set of icons you reuse; avoid importing dozens of rare icon names.
+
 `;
 
 

@@ -1,9 +1,14 @@
 import type { Request, Response } from "express";
-import type { CreateProjectBody, IdParams } from "../middleware/schemas";
+import type {
+  CreateProjectBody,
+  IdParams,
+  PreviewParams,
+} from "../middleware/schemas";
 import {
   createProject,
   getAllProjects,
   getProjectById,
+  getProjectPreviewHtml,
 } from "../services/project.service";
 
 export async function listProjects(_req: Request, res: Response): Promise<void> {
@@ -30,4 +35,24 @@ export async function createProjectHandler(
   const { message } = req.body as CreateProjectBody;
   const project = await createProject(message);
   res.status(201).json({ project });
+}
+
+export async function previewProject(
+  req: Request,
+  res: Response,
+): Promise<void> {
+  const { projectId } = req.params as PreviewParams;
+
+  try {
+    const html = await getProjectPreviewHtml(projectId);
+    if (html === null) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+    res.status(200).type("html").send(html);
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed to compile sandbox preview";
+    res.status(500).type("text/plain").send(message);
+  }
 }

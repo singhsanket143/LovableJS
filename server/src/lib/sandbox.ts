@@ -1,9 +1,25 @@
 import { exec, type ExecException } from "child_process";
+import * as esbuild from "esbuild";
 import fs from "fs/promises";
 import path from "path";
 import { promisify } from "util";
 
 import { sandboxRoot } from "../config/constants";
+
+const serverNodeModules = path.resolve(__dirname, "../../node_modules");
+
+const PREVIEW_ENTRY_CANDIDATES = [
+  "src/App.tsx",
+  "src/App.jsx",
+  "app/page.tsx",
+  "src/app/page.tsx",
+  "App.tsx",
+  "App.jsx",
+  "src/main.tsx",
+  "main.tsx",
+] as const;
+
+const PREVIEW_BOOTSTRAP_FILE = ".preview-bootstrap.tsx";
 
 export type FileCollection = Record<string, string>; // relative path to the file content
 
@@ -212,6 +228,126 @@ export async function readSandboxTree(sandboxId: string): Promise<FileCollection
 
 
     return files;
+}
+
+async function findSandboxAppEntry(sandboxDir: string): Promise<string> {
+  for (const candidate of PREVIEW_ENTRY_CANDIDATES) {
+    try {
+      await fs.access(path.join(sandboxDir, candidate));
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+
+  throw new Error(
+    `No preview entry found in sandbox. Tried: ${PREVIEW_ENTRY_CANDIDATES.join(", ")}`,
+  );
+}
+
+function previewBootstrapSource(appEntryRelative: string): string {
+  const importPath = `./${appEntryRelative.replace(/\\/g, "/")}`;
+  return `import React from "react";
+import { createRoot } from "react-dom/client";
+import App from ${JSON.stringify(importPath)};
+
+const container = document.getElementById("root");
+if (container) {
+  createRoot(container).render(React.createElement(App));
+}
+`;
+}
+
+function previewHtmlDocument(script: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <title>Sandbox preview</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script>${script}</script>
+  </body>
+</html>
+`;
+}
+
+export async function compileSandbox(sandboxId: string): Promise<string> {
+  const sandboxDir = resolveSandboxDir(sandboxId);
+  await fs.mkdir(sandboxDir, { recursive: true });
+
+  const appEntry = await findSandboxAppEntry(sandboxDir);
+  const bootstrapPath = path.join(sandboxDir, PREVIEW_BOOTSTRAP_FILE);
+  const bootstrapSource = previewBootstrapSource(appEntry);
+
+  await fs.writeFile(bootstrapPath, bootstrapSource, "utf8");
+
+  try {
+    const result = await esbuild.build({
+      absWorkingDir: sandboxDir,
+      entryPoints: [bootstrapPath],
+      bundle: true,
+      format: "iife",
+      platform: "browser",
+      target: ["es2020"],
+      jsx: "automatic",
+      jsxImportSource: "react",
+      loader: {
+        ".tsx": "tsx",
+        ".ts": "ts",
+        ".jsx": "jsx",
+        ".js": "js",
+      },
+      nodePaths: [serverNodeModules],
+      define: {
+        "process.env.NODE_ENV": JSON.stringify("production"),
+      },
+      write: false,
+      logLevel: "silent",
+    });
+
+    const output = result.outputFiles?.[0]?.text;
+    if (!output) {
+      throw new Error("esbuild produced no output");
+    }
+
+    return previewHtmlDocument(output);
+  } finally {
+    await fs.unlink(bootstrapPath).catch(() => undefined);
+  }
+}
+
+function formatCompileError(error: unknown): string {
+  if (error && typeof error === "object" && "errors" in error) {
+    const failures = (error as esbuild.BuildFailure).errors;
+    if (failures.length > 0) {
+      return failures
+        .map((item) => {
+          const location = item.location;
+          const where = location
+            ? `${location.file}:${location.line}:${location.column}`
+            : "bundle";
+          return `${where}: ${item.text}`;
+        })
+        .join("\n");
+    }
+  }
+
+  return error instanceof Error ? error.message : String(error);
+}
+
+/** Same as preview compile; returns a short agent-facing status string (not HTML). */
+export async function compileSandboxCheck(sandboxId: string): Promise<string> {
+  try {
+    const html = await compileSandbox(sandboxId);
+    const kilobytes = Math.round(Buffer.byteLength(html, "utf8") / 1024);
+    return `SUCCESS: Preview bundle compiled (${kilobytes} KB HTML). No esbuild errors.`;
+  } catch (error) {
+    return `COMPILE FAILED:\n${formatCompileError(error)}`;
+  }
 }
 
 

@@ -1,7 +1,7 @@
 import type { Project } from "../../generated/prisma/client";
 import { generateSlug } from "random-word-slugs";
 import type { FileCollection } from "../lib/sandbox";
-import { writeSandboxFiles } from "../lib/sandbox";
+import { compileSandbox, writeSandboxFiles } from "../lib/sandbox";
 import {
   createProjectWithMessage,
   findAllProjects,
@@ -23,6 +23,17 @@ export async function getAllProjects(): Promise<Project[]> {
 
 export async function getProjectById(id: string): Promise<Project | null> {
   return findProjectById(id);
+}
+
+export async function getProjectPreviewHtml(
+  projectId: string,
+): Promise<string | null> {
+  const project = await findProjectById(projectId);
+  if (!project) {
+    return null;
+  }
+
+  return compileSandbox(projectId);
 }
 
 export async function createProject(messageContent: string) {

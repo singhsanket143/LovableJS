@@ -24,10 +24,14 @@
     "@temporalio/workflow": "^1.24.0",
     "cors": "^2.8.6",
     "dotenv": "^18.0.0",
+    "esbuild": "^0.28.2",
     "express": "^5.2.1",
     "langchain": "^1.5.16",
+    "lucide-react": "^1.61.0",
     "pg": "^8.23.0",
     "random-word-slugs": "^0.1.7",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
     "zod": "^4.6.5"
   },
   "devDependencies": {

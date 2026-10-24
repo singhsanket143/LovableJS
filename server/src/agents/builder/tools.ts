@@ -1,6 +1,7 @@
 import { tool } from "langchain";
 import { z } from "zod";
 import {
+    compileSandboxCheck,
     FileCollection,
     readSandboxFiles,
     runSandboxCommand,
@@ -92,11 +93,27 @@ export function createBuilderTools(
         },
     );
 
+    const compilePreviewTool = tool(
+        async () => compileSandboxCheck(sandboxId),
+        {
+            name: "compilePreview",
+            description:
+                "Bundle the sandbox for browser preview (esbuild + React entry). Returns SUCCESS or COMPILE FAILED with esbuild errors. Use after implementing or fixing files, and fix any reported errors before finishing.",
+            schema: z.object({}),
+        },
+    );
+
     return {
         terminalTool,
         readFilesTool,
         createOrUpdateFilesTool,
-        tools: [terminalTool, readFilesTool, createOrUpdateFilesTool],
+        compilePreviewTool,
+        tools: [
+            terminalTool,
+            readFilesTool,
+            createOrUpdateFilesTool,
+            compilePreviewTool,
+        ],
     };
 
 }

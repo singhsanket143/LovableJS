@@ -7,6 +7,7 @@ import { serializePlanMessage, TodoItem, updateTodoStatusForSubagent } from "../
 import { savePlanMessage } from "../repository/message.repository";
 import { runDesigner } from "../agents/designer/run";
 import { runBuilder } from "../agents/builder/run";
+import { readSandboxTree } from "../lib/sandbox";
 
 const HEARTBEAT_INTERVAL_MS = 5_000;
 
@@ -170,7 +171,7 @@ export async function runBuilderActivity(
         });
 
         state.thread = result.thread;
-        state.files = result.files;
+        state.files = await readSandboxTree(input.sandboxId);
         state.builderNotes = result.notes;
 
         state.todos = updateTodoStatusForSubagent(state.todos, "build_app", "complete"); // move the build related todos to complete status from in_progress status

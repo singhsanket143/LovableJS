@@ -4,32 +4,47 @@ import { BuilderInput, BuilderResult } from "../types";
 import { createBuilderTools } from "./tools";
 import { env } from "../../config/env";
 import { BUILDER_PROMPT } from "./prompt";
-import { FileCollection } from "../../lib/sandbox";
-import { isRecurionLimitExceeded, lastAssistantText, streamAgentValues } from "../shared/langchain";
+import {
+    isRecurionLimitExceeded,
+    lastAssistantText,
+    streamAgentValues,
+} from "../shared/langchain";
 import { appendAgentMessage } from "../shared/handoff";
 
 export async function runBuilder(input: BuilderInput): Promise<BuilderResult> {
 
-    const files: FileCollection = {...input.files};
     if(!hasLlm()) {
         return { thread: input.thread, files: input.files, notes: "Created plan using the default plan" }
     }
 
-    const { terminalTool, readFilesTool, createOrUpdateFilesTool } = createBuilderTools(
-        input.sandboxId, input.files, () => input.onProgress?.());
+    const {
+        terminalTool,
+        readFilesTool,
+        createOrUpdateFilesTool,
+        compilePreviewTool,
+    } = createBuilderTools(
+        input.sandboxId,
+        input.files,
+        () => input.onProgress?.(),
+    );
 
     
 
     const agent = createAgent({
         name: "builder",
         model: getChatModel(env.OPENAI_MODEL, true),
-        tools: [terminalTool, readFilesTool, createOrUpdateFilesTool],
+        tools: [
+            terminalTool,
+            readFilesTool,
+            createOrUpdateFilesTool,
+            compilePreviewTool,
+        ],
         systemPrompt: BUILDER_PROMPT,
         version: "v1",
         signal: input.signal,
     });
 
-    const fileListing = Object.keys(files).join(', ') || "[No files]";
+    const fileListing = Object.keys(input.files).join(", ") || "[No files]";
 
     const contextTillNow = `
     Task:\n${input.task}\n\n
@@ -49,11 +64,14 @@ export async function runBuilder(input: BuilderInput): Promise<BuilderResult> {
     try {
         const stream = await agent.stream(agentInput, {
             streamMode: "values",
-            recursionLimit: 16,
+            recursionLimit: 64,
           });
     
         const result = await streamAgentValues(stream, {
             onProgress: input.onProgress,
+            onMessages: (messages) => {
+                lastMessages = messages;
+            },
         });
 
         lastMessages = result.messages;
@@ -64,12 +82,14 @@ export async function runBuilder(input: BuilderInput): Promise<BuilderResult> {
         input.onProgress?.();
     }
 
-    const notes = lastAssistantText(lastMessages) || "[Hardcoded] Builder created the files for the project";
+    const notes =
+        lastAssistantText(lastMessages) ||
+        "[Hardcoded] Builder created the files for the project";
 
     await input.onTodos?.([], { agent: "builder", detail: notes });
 
     const thread = appendAgentMessage(input.thread, "builder", notes);
 
-    return { thread, files, notes };
+    return { thread, files: input.files, notes };
 
 }
