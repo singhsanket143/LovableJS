@@ -206,14 +206,20 @@ export async function runBuilderActivity(
             files: input.state.files,
             thread: input.state.thread,
             todos: state.todos,
+            fixPass: input.fixPass,
             signal: cancellationSignal(),
             onProgress: beat,
-            onTodos: async (_todos, activity) => {
-              if(activity) {
+            onTodos: async (todos, activity) => {
+              if (todos.length > 0) {
+                state.todos = todos;
+              }
+              if (activity) {
                 await syncPlan(input.projectId, state, state.todos, activity);
+              } else if (todos.length > 0) {
+                await syncPlan(input.projectId, state, state.todos, null);
               }
               beat();
-            }
+            },
         });
 
         state.thread = result.thread;

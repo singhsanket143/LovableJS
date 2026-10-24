@@ -68,7 +68,7 @@ export async function codeAgentWorkflow(input: CodeAgentInput) {
   state = await runDesignerActivity(createAgentBasePayload(input, state));
   state = await runBuilderActivity({
     ...createAgentBasePayload(input, state),
-    task: "build the full React + tailwind app from the design document",
+    task: "Build the full React + Tailwind app from the design document and complete every build-phase step in the planner checklist.",
   });
 
   for (let round = 0; round < REVIEW_FIX_ROUNDS; round++) {

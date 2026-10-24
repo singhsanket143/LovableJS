@@ -42,6 +42,8 @@ export interface BuilderInput extends AgentRunHooks {
     files: FileCollection;
     design: string;
     task: string;
+    /** Review fix passes skip the planner checklist and todo middleware. */
+    fixPass?: boolean;
 }
 
 export interface BuilderResult {
