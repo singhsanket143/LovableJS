@@ -39,9 +39,11 @@ export async function getProjectPreviewHtml(
 export async function createProject(messageContent: string) {
   const name = generateSlug(3, { format: "kebab" });
   const project = await createProjectWithMessage({ name, messageContent });
-  await startCodeAgent({
+  void startCodeAgent({
     projectId: project.id,
     prompt: messageContent,
+  }).catch((error) => {
+    console.error("Failed to start code agent workflow:", error);
   });
   return project;
 }

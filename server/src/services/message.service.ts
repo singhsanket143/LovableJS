@@ -4,6 +4,7 @@ import {
   findMessagesByProjectId,
 } from "../repository/message.repository";
 import { findProjectById } from "../repository/project.repository";
+import { startCodeAgent } from "../temporal/client";
 
 export async function getMessagesByProjectId(
   projectId: string,
@@ -27,5 +28,14 @@ export async function addMessageToProject(
     return null;
   }
 
-  return createMessage({ projectId, content });
+  const message = await createMessage({ projectId, content });
+
+  void startCodeAgent({
+    projectId,
+    prompt: content,
+  }).catch((error) => {
+    console.error("Failed to start code agent workflow:", error);
+  });
+
+  return message;
 }
