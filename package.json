@@ -3,7 +3,9 @@
   "private": true,
   "scripts": {
     "dev": "npm run dev -w server",
-    "dev:all": "npm run dev:all -w server",
+    "dev:client": "npm run dev -w client",
+    "dev:all": "concurrently -n client,server,worker -c cyan,blue,green \"npm run dev -w client\" \"npm run dev -w server\" \"npm run dev:worker -w server\"",
+    "dev:server": "npm run dev:all -w server",
     "dev:worker": "npm run dev:worker -w server",
     "docker:up": "docker compose up -d --wait",
     "docker:down": "docker compose down",
@@ -14,9 +16,13 @@
     "db:push": "npm run prisma:push -w server"
   },
   "workspaces": [
-    "server"
+    "server",
+    "client"
   ],
   "dependencies": {
     "lucide-react": "^1.61.0"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.6"
   }
 }
